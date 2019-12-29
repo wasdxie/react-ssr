@@ -2,7 +2,7 @@ import React from 'react';
 import {renderToString} from 'react-dom/server';
 import express from 'express';
 import App from '../src/App';
-import {StaticRouter,matchPath,Route} from "react-router-dom";
+import {StaticRouter,matchPath,Route,Switch} from "react-router-dom";
 import {getServerStore} from '../src/store/store'
 import {Provider} from 'react-redux'
 import routes from  '../src/App';
@@ -10,6 +10,10 @@ import Header from "../src/component/header";
 const store = getServerStore()
 const app = express();
 import axios from 'axios';
+import path from 'path';
+import fs from 'fs';
+
+
 
 //这里拦截  第二个问题
 axios.interceptors.request.use(
@@ -26,8 +30,23 @@ axios.interceptors.request.use(
 
 app.use(express.static('public'));
 
+
+function startCsr(res){
+    //读取csr 文件
+    const filename = path.resolve(process.cwd(),'public/index.csr.html');
+    const html = fs.readFileSync(filename,'utf-8');
+    console.log(html);
+    return res.send(html)
+}
+//配置开关
+
+
 app.get("*",(req,res)=>{
     console.log(req.path)
+    if(req.query._mode=='csr'){
+        console.log('url参数开启csr降级');
+        return  startCsr(res);
+    }
     if(req.path.indexOf('/kaikeba123/')> -1){//这里转发 第二个问题
         axios.get(req.path).then((restmp)=>{
             res.send(restmp.data)
@@ -58,19 +77,36 @@ app.get("*",(req,res)=>{
        //获取根据路由渲染出来的组件，
     
        Promise.all(promises).then(()=>{
+           const context = {
+               css:[]
+           }
         const content = renderToString(
             <Provider store={store}>
-                <StaticRouter location={req.url}>
+                <StaticRouter location={req.url}  context={context}>
                   <Header></Header>
-                {routes.map((route)=><Route {...route}></Route>)}
+                  <Switch>
+                    {routes.map((route)=><Route {...route} key={route.key}></Route>)}
+                  </Switch>
+               
             </StaticRouter>
             </Provider>
         );
-        res.send(`
+
+        console.log('context',context)
+        if(context.statuscode){
+             res.status(context.statuscode)
+        }
+
+        if(context.action == 'REPLACE'){
+            res.redirect(301,context.url)
+        }
+        const css = context.css.join('\n')
+            res.send(`
             <html>
                 <head>
                     <meta charset="utf-8"/>
                     <title>react ssr</title>
+                    <style>${css}</style>
                 </head>
                 <body>
                     <div id="root">${content}</div>
@@ -81,7 +117,10 @@ app.get("*",(req,res)=>{
                 <script src="/bundle.js"></script>
             </html>
         `)
+        
+
        }).catch((e)=>{
+           console.log(e);
             res.send('报错501')
        })
     }

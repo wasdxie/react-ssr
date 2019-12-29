@@ -1,6 +1,6 @@
 import React from 'react';
 import ReactDom from 'react-dom';
-import {BrowserRouter,Route} from 'react-router-dom';
+import {BrowserRouter,Route,Switch} from 'react-router-dom';
 import Header from "../src/component/header";
 import routes from '../src/App';
 import {getClientStore} from '../src/store/store'
@@ -23,9 +23,15 @@ const Page = (
     <Provider store={getClientStore()}>
         <BrowserRouter>
             <Header></Header>
-            {routes.map((route)=>{return <Route {...route}></Route>})}
+            <Switch>
+                {routes.map((route)=>{return <Route {...route} key={route.key}></Route>})}
+            </Switch>
         </BrowserRouter>
     </Provider>
 )
 
-ReactDom.hydrate(Page,document.getElementById('root'));
+if(window._context){
+    ReactDom.hydrate(Page,document.getElementById('root'));
+}else{
+    ReactDom.render(Page,document.getElementById('root'));
+}
